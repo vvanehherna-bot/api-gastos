@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mis gastos</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; margin: 0; background: #f3f0ff; color: #2d2a3e; }
+  header { background: linear-gradient(135deg, #7c3aed, #ec4899); color: white; padding: 24px; text-align: center; }
+  header h1 { margin: 0; font-size: 1.8rem; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+  .tarjeta { background: white; border-radius: 14px; padding: 20px; box-shadow: 0 4px 14px rgba(124,58,237,.12); }
+  h2 { margin-top: 0; color: #7c3aed; font-size: 1.2rem; }
+  form { display: grid; gap: 10px; }
+  input { padding: 10px; border: 2px solid #ddd6fe; border-radius: 8px; font-size: 1rem; }
+  input:focus { outline: none; border-color: #7c3aed; }
+  button { background: #7c3aed; color: white; border: 0; border-radius: 8px; padding: 10px 16px; font-size: 1rem; cursor: pointer; }
+  button:hover { background: #6d28d9; }
+  button.borrar { background: #ef4444; padding: 6px 10px; font-size: .85rem; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid #ede9fe; }
+  th { color: #7c3aed; }
+  .total { font-size: 1.4rem; font-weight: bold; color: #ec4899; }
+  .fila-resumen { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #ede9fe; }
+  .mensaje { color: #ef4444; min-height: 1.2em; }
+  .filtro { display: flex; gap: 8px; margin-bottom: 10px; }
+  .filtro input { flex: 1; }
+  .scroll { overflow-x: auto; }
+</style>
+</head>
+<body>
+<header><h1>💸 Mis gastos</h1></header>
+<main>
+  <section class="tarjeta">
+    <h2>Agregar un gasto</h2>
+    <form id="formulario">
+      <input id="monto" type="number" step="0.01" min="0" placeholder="Monto (ej. 150.50)" required>
+      <input id="categoria" type="text" placeholder="Categoría (ej. comida)" required>
+      <input id="fecha" type="date" required>
+      <button type="submit">Guardar gasto</button>
+      <div class="mensaje" id="mensaje"></div>
+    </form>
+  </section>
+
+  <section class="tarjeta">
+    <h2>Resumen por categoría</h2>
+    <div class="filtro">
+      <input id="mes" type="month">
+      <button id="botonMes" type="button">Filtrar</button>
+      <button id="botonTodo" type="button">Ver todo</button>
+    </div>
+    <div class="total" id="totalGeneral"></div>
+    <div id="resumen"></div>
+  </section>
+
+  <section class="tarjeta">
+    <h2>Todos los gastos</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Fecha</th><th>Categoría</th><th>Monto</th><th></th></tr></thead>
+        <tbody id="lista"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+const dinero = (n) => "$" + Number(n).toFixed(2);
+document.getElementById("fecha").valueAsDate = new Date();
+
+async function cargarLista() {
+  const respuesta = await fetch("/gastos");
+  const gastos = await respuesta.json();
+  const cuerpo = document.getElementById("lista");
+  cuerpo.innerHTML = "";
+  gastos.forEach((g) => {
+    const fila = document.createElement("tr");
+    [g.fecha, g.categoria, dinero(g.monto)].forEach((texto) => {
+      const celda = document.createElement("td");
+      celda.textContent = texto;
+      fila.appendChild(celda);
+    });
+    const celdaBoton = document.createElement("td");
+    const boton = document.createElement("button");
+    boton.className = "borrar";
+    boton.textContent = "Borrar";
+    boton.onclick = async () => {
+      await fetch("/gastos/" + g.id, { method: "DELETE" });
+      actualizar();
+    };
+    celdaBoton.appendChild(boton);
+    fila.appendChild(celdaBoton);
+    cuerpo.appendChild(fila);
+  });
+}
+
+async function cargarResumen(mes) {
+  const url = mes ? "/resumen?mes=" + mes : "/resumen";
+  const datos = await (await fetch(url)).json();
+  document.getElementById("totalGeneral").textContent = "Total: " + dinero(datos.total_general);
+  const contenedor = document.getElementById("resumen");
+  contenedor.innerHTML = "";
+  datos.por_categoria.forEach((c) => {
+    const fila = document.createElement("div");
+    fila.className = "fila-resumen";
+    const nombre = document.createElement("span");
+    nombre.textContent = c.categoria;
+    const total = document.createElement("strong");
+    total.textContent = dinero(c.total);
+    fila.append(nombre, total);
+    contenedor.appendChild(fila);
+  });
+}
+
+function actualizar() {
+  cargarLista();
+  cargarResumen(document.getElementById("mes").value);
+}
+
+document.getElementById("formulario").onsubmit = async (e) => {
+  e.preventDefault();
+  const mensaje = document.getElementById("mensaje");
+  const respuesta = await fetch("/gastos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      monto: parseFloat(document.getElementById("monto").value),
+      categoria: document.getElementById("categoria").value.trim().toLowerCase(),
+      fecha: document.getElementById("fecha").value,
+    }),
+  });
+  if (respuesta.ok) {
+    mensaje.textContent = "";
+    document.getElementById("monto").value = "";
+    document.getElementById("categoria").value = "";
+    actualizar();
+  } else {
+    mensaje.textContent = "No se pudo guardar. Revisa los datos.";
+  }
+};
+
+document.getElementById("botonMes").onclick = actualizar;
+document.getElementById("botonTodo").onclick = () => {
+  document.getElementById("mes").value = "";
+  actualizar();
+};
+
+actualizar();
+</script>
+</body>
+</html>

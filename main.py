@@ -63,3 +63,11 @@ def resumen(mes: str | None = None):
     por_categoria = [dict(fila) for fila in filas]
     total_general = sum(fila["total"] for fila in por_categoria)
     return {"total_general": total_general, "por_categoria": por_categoria}
+
+
+from fastapi.responses import FileResponse
+
+
+@app.get("/app", include_in_schema=False)
+def pagina():
+    return FileResponse("index.html")
