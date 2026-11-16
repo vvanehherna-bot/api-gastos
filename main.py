@@ -45,3 +45,21 @@ def borrar_gasto(gasto_id: int):
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Gasto no encontrado")
     return {"mensaje": "Gasto eliminado"}
+
+
+@app.get("/resumen")
+def resumen(mes: str | None = None):
+    """Total por categoría. Filtro opcional: mes en formato AAAA-MM."""
+    consulta = "SELECT categoria, SUM(monto) AS total FROM gastos"
+    parametros = []
+    if mes:
+        consulta += " WHERE fecha LIKE ?"
+        parametros.append(f"{mes}%")
+    consulta += " GROUP BY categoria ORDER BY total DESC"
+
+    with conectar() as conexion:
+        filas = conexion.execute(consulta, parametros).fetchall()
+
+    por_categoria = [dict(fila) for fila in filas]
+    total_general = sum(fila["total"] for fila in por_categoria)
+    return {"total_general": total_general, "por_categoria": por_categoria}
